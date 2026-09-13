@@ -10,8 +10,7 @@ env/
 *.jsonl
 *.parquet
 *.pkl
-data/raw/
-data/processed/
+
 
 # Model weights
 *.gguf
