@@ -1,0 +1,53 @@
+# ============================================
+# Unified Legal Assistant for India
+# Python 3.11.x required
+# ============================================
+
+# ----- Core Data Handling -----
+pandas==3.0.5
+numpy==2.4.6
+scikit-learn==1.9.1
+scipy==1.17.1
+pyarrow==25.0.1 #Required by pandas and datasets for Parquet/Arrow handling
+
+# ----- Vector Database & Embeddings -----
+chromadb==1.5.9
+sentence-transformers==6.0.1
+onnxruntime==1.30.0 #Required by chromadb for embedding inference
+tokenizers==0.23.2
+safetensors==0.8.0
+
+# ----- Hugging Face (Datasets & Models) -----
+huggingface_hub==1.31.0
+datasets==5.0.1
+transformers==5.17.0
+accelerate #Required by transformers for efficient model loading. Not pinned because it's a transitive dependency.
+hf-xet==1.6.0
+
+# ----- Graph Database -----
+neo4j==6.3.0
+
+# ----- Local LLM -----
+ollama==0.6.2
+
+# ----- Backend API -----
+fastapi==0.141.1
+uvicorn[standard]==0.52.4 #Includes performance extras (uvloop, httptools) for the FastAPI server
+python-multipart==0.0.32
+pydantic==2.13.5
+pydantic-settings==2.15.0
+
+# ----- Frontend -----
+streamlit==1.63.0
+altair==6.2.2
+pydeck==0.9.3
+
+# ----- Utilities -----
+python-dotenv==1.2.3
+tqdm==4.70.1
+rich==15.0.0
+PyYAML==6.0.3
+requests==2.34.2
+
+# ----- Testing -----
+pytest==9.1.1
