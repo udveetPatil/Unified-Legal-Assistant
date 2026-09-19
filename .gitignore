@@ -35,3 +35,7 @@ desktop.ini
 
 # Logs
 *.log
+
+#temporary download artifacts
+.cache/
+**/.cache/
