@@ -90,3 +90,45 @@ All notable changes to the Unified Legal Assistant project are recorded here.
 | Criminal (old) | IPC/CrPC/IEA | CrPC QA | GovIntel | 511 |
 | Constitutional | In QA form | 3,311 | N/A | In QA |
 | Consumer | CPA 2019 (163) | None | N/A | None |
+
+
+
+## [2026-09-29 18:00] - Retrieval Pipeline Complete
+
+### What Changed
+- `src/vector_db/build_index.py`: Fixed GovIntel section loading (field name `section_text`, not `section_content`)
+- `src/vector_db/retriever.py`: Added temporal filter (IPC 1860 for substantive, CrPC 1973 for procedural)
+- `src/vector_db/bm25_retriever.py`: Mirrored temporal filter logic
+- `src/vector_db/hybrid.py`: New file. Reciprocal Rank Fusion merger
+- `src/vector_db/reranker.py`: New file. Cross-encoder re-ranker
+- `src/pipeline.py`: New file. Full retrieval pipeline
+
+### Why
+- GovIntel sections were silently skipped due to wrong field name
+- Temporal queries returned BNS instead of IPC because no temporal filter existed
+- Vector + BM25 alone could not rank raw section text above QA pairs
+
+### Output
+**Before ("punishment for murder"):**
+1. CrPC QA (wrong source)
+2. BNS Section 105 (near-miss)
+...
+
+**After ("punishment for murder"):**
+1. **BNS Section 103 (raw text)** ✅
+2. IPC Section 302 (raw text)
+3. BNS Section 103 (GSMS-B QA)
+4. BNS Section 104
+5. BNS Section 105
+
+**After ("punishment for murder in 2010"):**
+1. **IPC Section 302 (raw text)** ✅
+2. IPC Section 303
+3. IPC Section 304
+4. IPC Section 396
+5. IPC Section 307
+
+**After ("how do I file an FIR?"):**
+1. CrPC QA (procedure) ✅
+
+**Collection size:** 16,153 documents (was 14,548)
