@@ -26,12 +26,19 @@ class VectorRetriever:
         else:
             base_filter = None
 
-        # ----- Additional filters override or combine -----
         conditions = []
         if base_filter:
             conditions.append(base_filter)
-        if intent.act:
+
+        # ----- Temporal: default to IPC for substantive, CrPC for procedural -----
+        if intent.is_temporal and not intent.act:
+            if intent.legal_type == "procedural":
+                conditions.append({"act": "CrPC 1973"})
+            else:
+                conditions.append({"act": "IPC 1860"})
+        elif intent.act:
             conditions.append({"act": intent.act})
+
         if intent.section_number:
             conditions.append({"section_number": intent.section_number})
 

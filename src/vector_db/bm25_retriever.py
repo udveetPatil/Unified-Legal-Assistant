@@ -59,7 +59,7 @@ class BM25Retriever:
         return text.lower().split()
 
     def _build_where_filter(self, intent: QueryIntent) -> dict | None:
-        """Build a metadata filter from the intent (same logic as VectorRetriever)."""
+        """Build a ChromaDB where filter from the intent."""
 
         # ----- Legal type determines source preference -----
         if intent.legal_type == "procedural":
@@ -72,8 +72,16 @@ class BM25Retriever:
         conditions = []
         if base_filter:
             conditions.append(base_filter)
-        if intent.act:
+
+        # ----- Temporal: default to IPC for substantive, CrPC for procedural -----
+        if intent.is_temporal and not intent.act:
+            if intent.legal_type == "procedural":
+                conditions.append({"act": "CrPC 1973"})
+            else:
+                conditions.append({"act": "IPC 1860"})
+        elif intent.act:
             conditions.append({"act": intent.act})
+
         if intent.section_number:
             conditions.append({"section_number": intent.section_number})
 
@@ -85,6 +93,7 @@ class BM25Retriever:
 
     def _matches_filter(self, metadata: dict, intent: QueryIntent) -> bool:
         """Check if a document matches the intent's metadata filters."""
+
         # ----- Legal type filter -----
         if intent.legal_type == "procedural":
             if metadata.get("source") != "crpc_qa":
@@ -93,9 +102,14 @@ class BM25Retriever:
             if metadata.get("source") == "crpc_qa":
                 return False
 
-        # ----- Act filter -----
-        if intent.act and metadata.get("act") != intent.act:
-            return False
+        # ----- Temporal or act filter -----
+        if intent.is_temporal and not intent.act:
+            expected_act = "CrPC 1973" if intent.legal_type == "procedural" else "IPC 1860"
+            if metadata.get("act") != expected_act:
+                return False
+        elif intent.act:
+            if metadata.get("act") != intent.act:
+                return False
 
         # ----- Section filter -----
         if intent.section_number and metadata.get("section_number") != intent.section_number:
