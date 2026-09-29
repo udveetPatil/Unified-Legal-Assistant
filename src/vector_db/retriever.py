@@ -19,18 +19,27 @@ class VectorRetriever:
         """Build a ChromaDB where filter from the intent."""
         conditions = []
 
-        if intent.act:
-            conditions.append({"act": intent.act})
-        if intent.section_number:
-            conditions.append({"section_number": intent.section_number})
-        if intent.question_type:
-            conditions.append({"question_type": intent.question_type})
+        # Section number + Act = most precise
+        if intent.section_number and intent.act:
+            return {"$and": [
+                {"act": intent.act},
+                {"section_number": intent.section_number},
+            ]}
 
-        if len(conditions) == 0:
-            return None
-        if len(conditions) == 1:
-            return conditions[0]
-        return {"$and": conditions}
+        # Section number only
+        if intent.section_number:
+            return {"section_number": intent.section_number}
+
+        # Act only
+        if intent.act:
+            return {"act": intent.act}
+
+        # Temporal: default to IPC for substantive, CrPC for procedural
+        if intent.is_temporal:
+            return {"act": "IPC 1860"}
+
+        # No filter
+        return None
 
     def retrieve(self, intent: QueryIntent, top_k: int = 20) -> list[dict]:
         """Retrieve top_k candidates from ChromaDB."""
