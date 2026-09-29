@@ -39,3 +39,7 @@ desktop.ini
 #temporary download artifacts
 .cache/
 **/.cache/
+
+data/processed/
+*.sqlite3
+*.pickle
