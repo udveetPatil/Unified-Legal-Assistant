@@ -17,29 +17,29 @@ class VectorRetriever:
 
     def _build_where_filter(self, intent: QueryIntent) -> dict | None:
         """Build a ChromaDB where filter from the intent."""
+
+        # ----- Legal type determines source preference -----
+        if intent.legal_type == "procedural":
+            base_filter = {"source": "crpc_qa"}
+        elif intent.legal_type == "substantive":
+            base_filter = {"source": {"$ne": "crpc_qa"}}
+        else:
+            base_filter = None
+
+        # ----- Additional filters override or combine -----
         conditions = []
-
-        # Section number + Act = most precise
-        if intent.section_number and intent.act:
-            return {"$and": [
-                {"act": intent.act},
-                {"section_number": intent.section_number},
-            ]}
-
-        # Section number only
-        if intent.section_number:
-            return {"section_number": intent.section_number}
-
-        # Act only
+        if base_filter:
+            conditions.append(base_filter)
         if intent.act:
-            return {"act": intent.act}
+            conditions.append({"act": intent.act})
+        if intent.section_number:
+            conditions.append({"section_number": intent.section_number})
 
-        # Temporal: default to IPC for substantive, CrPC for procedural
-        if intent.is_temporal:
-            return {"act": "IPC 1860"}
-
-        # No filter
-        return None
+        if len(conditions) == 0:
+            return None
+        if len(conditions) == 1:
+            return conditions[0]
+        return {"$and": conditions}
 
     def retrieve(self, intent: QueryIntent, top_k: int = 20) -> list[dict]:
         """Retrieve top_k candidates from ChromaDB."""
@@ -70,7 +70,6 @@ class VectorRetriever:
         return candidates
 
 
-# ----- Test -----
 if __name__ == "__main__":
     from src.classifier.intent import classify
 
@@ -79,12 +78,15 @@ if __name__ == "__main__":
     test_queries = [
         "What is the punishment for murder?",
         "What does Section 103 of BNS say?",
+        "How do I file an FIR?",
         "What was the punishment for murder in 2010?",
+        "My friend was arrested without a warrant. What are his rights?",
     ]
 
     for q in test_queries:
         intent = classify(q)
         print(f"\nQuery: {q}")
+        print(f"Legal type: {intent.legal_type}")
         print(f"Filter: {retriever._build_where_filter(intent)}")
         results = retriever.retrieve(intent, top_k=5)
         for i, r in enumerate(results, 1):

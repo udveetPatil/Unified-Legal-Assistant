@@ -4,7 +4,7 @@ Extracts structured signals from a user query.
 """
 
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Optional
 
 
@@ -13,6 +13,7 @@ class QueryIntent:
     raw_query: str
     domain: str = "criminal"           # criminal | constitutional | consumer
     complexity: str = "simple"          # simple | complex
+    legal_type: str = "substantive"     # substantive | procedural | unclear
     act: Optional[str] = None           # BNS 2023 | BNSS 2023 | BSA 2023 | IPC 1860 | CrPC 1973
     section_number: Optional[str] = None
     question_type: Optional[str] = None  # definitional | scenario | consequence | elements | exceptions
@@ -53,13 +54,33 @@ QUESTION_TYPE_KEYWORDS = {
 
 TEMPORAL_KEYWORDS = [
     "before 2024", "old law", "prior to", "previously",
-    "was the law", "used to be", "ipc", "crpc", "iea",
+    "was the law", "used to be",
     "2010", "2015", "2020", "history", "changed",
 ]
 
 COMPLEXITY_KEYWORDS = [
     "can i", "should i", "what if", "my friend", "my",
     "how do i", "is it legal", "am i", "scenario",
+]
+
+PROCEDURAL_KEYWORDS = [
+    "procedure", "how to file", "how do i file", "file a case",
+    "fir", "first information report", "arrest", "bail", "anticipatory bail",
+    "trial", "court", "hearing", "summons", "warrant",
+    "investigation", "charge sheet", "chargesheet",
+    "evidence", "witness", "testimony", "cross-examination",
+    "appeal", "revision", "review",
+    "jurisdiction", "territorial jurisdiction",
+    "complaint", "prosecution",
+]
+
+SUBSTANTIVE_KEYWORDS = [
+    "punishment", "penalty", "sentence", "imprisonment", "fine",
+    "what is", "define", "definition", "meaning",
+    "offence", "offense", "crime",
+    "murder", "theft", "robbery", "dacoity", "assault",
+    "rape", "kidnapping", "cheating", "fraud",
+    "section", "ingredients", "elements",
 ]
 
 
@@ -100,19 +121,36 @@ def classify(query: str) -> QueryIntent:
     if any(kw in q_lower for kw in COMPLEXITY_KEYWORDS):
         intent.complexity = "complex"
 
+    # ----- Legal type detection -----
+    procedural_score = sum(1 for kw in PROCEDURAL_KEYWORDS if kw in q_lower)
+    substantive_score = sum(1 for kw in SUBSTANTIVE_KEYWORDS if kw in q_lower)
+
+    if procedural_score > substantive_score:
+        intent.legal_type = "procedural"
+    elif substantive_score > procedural_score:
+        intent.legal_type = "substantive"
+    else:
+        intent.legal_type = "unclear"
+
     return intent
 
 
-# ----- Test -----
 if __name__ == "__main__":
     test_queries = [
         "What is the punishment for murder?",
         "What does Section 103 of BNS say?",
+        "How do I file an FIR?",
+        "What are the grounds for anticipatory bail?",
         "What was the punishment for murder in 2010?",
         "My friend was arrested without a warrant. What are his rights?",
-        "What is a consumer under the Consumer Protection Act?",
-        "Explain Article 21 of the Constitution.",
+        "What is the procedure for a criminal trial?",
     ]
     for q in test_queries:
+        intent = classify(q)
         print(f"\nQuery: {q}")
-        print(f"  {classify(q)}")
+        print(f"  legal_type : {intent.legal_type}")
+        print(f"  act        : {intent.act}")
+        print(f"  section    : {intent.section_number}")
+        print(f"  q_type     : {intent.question_type}")
+        print(f"  temporal   : {intent.is_temporal}")
+        print(f"  complexity : {intent.complexity}")
