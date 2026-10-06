@@ -93,7 +93,7 @@ All notable changes to the Unified Legal Assistant project are recorded here.
 
 
 
-## [2026-09-29 18:00] - Retrieval Pipeline Complete
+## [2026-10-07 00:58] - Retrieval Pipeline Complete
 
 ### What Changed
 - `src/vector_db/build_index.py`: Fixed GovIntel section loading (field name `section_text`, not `section_content`)
@@ -132,3 +132,21 @@ All notable changes to the Unified Legal Assistant project are recorded here.
 1. CrPC QA (procedure) ✅
 
 **Collection size:** 16,153 documents (was 14,548)
+
+## [2026-10-07 10:30] - Graph DB + Verifier Merged into Master
+
+### What Changed
+- Merged `GraphDB-and-verifier-built` branch into `master`
+- Resolved merge with `origin/master` (README addition)
+- All Graph DB and Verifier files now on `master`
+
+### Why
+- The teammate's work is now the single source of truth
+- No more branch divergence
+
+### Output
+- `src/graph_db/build_graph.py`: builds Neo4j graph
+- `src/verifier/verifier_agent.py`: verifies answers against the graph
+- `tests/test_graph_db.py`, `tests/test_verifier.py`: 15 tests, all pass
+- `docs/GRAPH_DB_AND_VERIFIER_ANALYSIS.md`: 269-line statistical analysis
+- Git graph now shows a clean merge commit
