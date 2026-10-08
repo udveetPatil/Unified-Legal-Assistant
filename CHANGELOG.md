@@ -150,3 +150,105 @@ All notable changes to the Unified Legal Assistant project are recorded here.
 - `tests/test_graph_db.py`, `tests/test_verifier.py`: 15 tests, all pass
 - `docs/GRAPH_DB_AND_VERIFIER_ANALYSIS.md`: 269-line statistical analysis
 - Git graph now shows a clean merge commit
+
+
+## [2026-10-08 13:19] - Stress Test Reveals Critical Retrieval Weaknesses
+
+### What Changed
+- `tests/stress_test.py`: New 40-query stress test covering 9 categories
+- `tests/stress_test_results.json`: Structured results with per-query and per-category stats
+- `CHANGELOG.md`: This entry
+
+### Why
+- We needed empirical evidence of where the system fails before deciding what to fix
+- Manual testing of 40 queries was too slow and unreliable
+
+### Results Summary
+
+| Category | Queries | Correct | Accuracy | Avg Confidence |
+|---|---|---|---|---|
+| BNS substantive (multi-hop) | 5 | 2 | 40% | 0.63 |
+| Temporal | 5 | 2 | 40% | 0.60 |
+| Procedural | 5 | 0 | 0% | 0.45 |
+| Constitutional | 5 | 0 | 0% | 0.51 |
+| Consumer | 3 | 0 | 0% | 0.55 |
+| Out-of-scope | 5 | 2 | 40% | 0.52 |
+| Ambiguous | 4 | 1 | 25% | 0.80 |
+| Typos | 3 | 2 | 67% | 0.83 |
+| Specific section | 5 | 1 | 20% | 0.54 |
+| **TOTAL** | **40** | **~10** | **~25%** | — |
+
+### The Three Critical Weaknesses
+
+#### Weakness 1: Section Number Collisions
+
+The system does not distinguish between a section number in one act vs another.
+
+| Query | Top Candidate | Correct Answer | What Went Wrong |
+|---|---|---|---|
+| "What is Article 21?" | BNSS 2023 Sec 21 | Constitution Article 21 | Matched on "21", ignored "Article" |
+| "What is Section 302?" | BNS 2023 Sec 302 | IPC 1860 Sec 302 | Matched on "302", ignored that IPC 302 is the famous murder section |
+| "What is Section 420?" | BNSS 2023 Sec 420 | IPC 1860 Sec 420 | Matched on "420", ignored "cheating" context |
+| "What is Section 144?" | BNSS 2023 Sec 144 | CrPC 1973 Sec 144 | Matched on "144", ignored "unlawful assembly" context |
+| "What is Section 498A?" | NO CANDIDATES | IPC 1860 Sec 498A | Section 498A does not exist in the graph |
+
+**Root cause:** The Intent Classifier detects section numbers but does not detect which act they belong to. The retriever then searches all acts and returns whichever section number matches.
+
+**Impact:** All "What is Section X?" queries are unreliable unless the user explicitly names the act.
+
+#### Weakness 2: Consumer and Constitution Raw Text Missing from Vector DB
+
+The Consumer Protection Act 2019 sections and the Constitution Articles 12–35 are not in the ChromaDB collection.
+
+| Query | Top Candidate | Should Have Been |
+|---|---|---|
+| "What is a consumer under CPA?" | BNS 2023 Sec 349 | CPA 2019 Sec 2(7) |
+| "How do I file a consumer complaint?" | NO CANDIDATES | CPA 2019 Sec 35 |
+| "What is the penalty for misleading ads?" | BNS 2023 Sec 283 | CPA 2019 Sec 89 |
+| "Can I be arrested for posting online?" | NO CANDIDATES | Article 19(1)(a) |
+
+**Root cause:** The files `data/raw/consumer/cpa_2019_sections.json` and `data/raw/constitution_qa/constitution_qa.json` exist on disk but are not loaded by `build_index.py`.
+
+**Impact:** Consumer and constitutional queries never return the correct answer.
+
+#### Weakness 3: The Verifier's "Verified" Flag Is Misleading
+
+The verifier returns "verified: True" whenever the retrieved section exists in the graph. It does not check whether the retrieved section is the correct answer for the query.
+
+| Query | Verifier Says | Reality |
+|---|---|---|
+| "What is Article 21?" | ✅ Verified 0.68 | Wrong section (BNSS 21) |
+| "What is a consumer under CPA?" | ✅ Verified 0.83 | Wrong section (BNS 349) |
+| "Can my landlord evict me?" | ✅ Verified 0.82 | Out of scope |
+
+**Root cause:** The verifier's confidence score is based on graph existence and connectivity, not on semantic relevance to the query.
+
+**Impact:** The user sees a green "Verified" badge for wrong answers. This undermines the core anti-hallucination guarantee.
+
+### What Is Working Well
+
+| Category | Evidence |
+|---|---|
+| BNS substantive law | Murder vs culpable homicide (#15), mob lynching (#16), abetment (#18) all correct |
+| Temporal queries | IPC 376 for rape in 2010 (#19), IPC 497 for adultery in 2015 (#22) correct |
+| Explicit BNS lookups | "bns 103 kya hai" (#35) returned BNS 103 correctly |
+| Typos and informal phrasing | "whats the punishmnt for murdr" (#33) handled |
+| Out-of-scope rejection | Anticipatory bail (#2), rights when arrested (#4), juvenile (#17), divorce (#24) all correctly returned 0.0 confidence |
+
+### Priority for Fixes
+
+1. **Add Consumer and Constitution text to `build_index.py`** — 1–2 hours, immediate 20% accuracy gain
+2. **Add act-aware section resolution to the Intent Classifier** — 1 day, fixes "Section X" queries
+3. **Improve the verifier's confidence score** — 2 days, makes the "Verified" flag trustworthy
+4. **Add vague-query detection** — 2 hours, improves UX for ambiguous queries
+
+### Current State of the System
+
+| Component | Status |
+|---|---|
+| Vector DB | 16,153 documents (missing Consumer + Constitution) |
+| Graph DB | 2,339 nodes, 5,384 edges |
+| Retrieval Pipeline | Works for BNS substantive and temporal; fails for section lookups and out-of-scope acts |
+| Verifier | Works for existence checks; fails for relevance checks |
+| UI | Working |
+| Overall Accuracy | ~25% across 40 varied queries |
