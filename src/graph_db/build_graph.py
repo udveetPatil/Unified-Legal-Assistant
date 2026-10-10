@@ -15,6 +15,8 @@ console = Console()
 BASE = Path(__file__).resolve().parent.parent.parent
 INIRAC_DIR = BASE / "data" / "raw" / "inIRAC" / "data"
 SECTIONS_DIR = BASE / "data" / "raw" / "govintel" / "sections"
+CONSUMER_PATH = BASE / "data" / "raw" / "consumer" / "cpa_2019_sections.json"
+CONSTITUTION_PATH = BASE / "data" / "raw" / "constitution_qa" / "constitution_qa.json"
 GRAPH_DIR = BASE / "data" / "raw" / "govintel" / "graph"
 
 # --- Neo4j connection ---
@@ -324,13 +326,18 @@ def build():
     driver = get_driver()
 
     with driver.session() as session:
+        # Wipe the graph (idempotent rebuild)
+        console.print("[dim]Wiping existing graph...[/]")
+        session.run("MATCH (n) DETACH DELETE n")
+
         # Setup constraints
         console.print("[dim]Setting up constraints & indexes...[/]")
         session.execute_write(setup_constraints)
 
         # Load nodes
         load_sections(session)
-        load_inirac_cases(session)
+        load_extra_sections(session)
+        # load_inirac_cases(session)  # Dropped: InIRAC extraction failed (94.3% unusable)
 
         # Load edges
         load_deterministic_edges(session)
@@ -340,6 +347,81 @@ def build():
 
     driver.close()
     console.print("[bold green] Graph DB built successfully.[/]")
+
+def load_extra_sections(session):
+    """Load Consumer Protection Act and Constitution sections into the graph."""
+    from rich.progress import track
+
+    # ----- Consumer Protection Act 2019 -----
+    if CONSUMER_PATH.exists():
+        consumer = json.loads(CONSUMER_PATH.read_text(encoding="utf-8"))
+        console.print(f"[cyan] Loading {len(consumer)} CPA 2019 sections[/]")
+        session.execute_write(create_statute_node, "CPA 2019", 2019)
+        for sec in track(consumer, description="  CPA 2019"):
+            num = str(sec.get("section_number", "")).zfill(3)
+            sid = f"CPA_2019_SEC_{num}"
+            session.execute_write(
+                lambda tx, sid=sid, sec=sec: tx.run("""
+                    MERGE (s:SECTION {section_id: $sid})
+                    SET s.act = 'CPA 2019',
+                        s.number = $number,
+                        s.title = $title,
+                        s.text = $text,
+                        s.year = 2019
+                """,
+                    sid=sid,
+                    number=sec.get("section_number", ""),
+                    title=sec.get("section_title", ""),
+                    text=sec.get("section_content", "")[:2000],
+                )
+            )
+            session.execute_write(link_section_to_statute, sid, "CPA 2019")
+
+    # ----- Constitution Articles 12-35 (from QA data) -----
+    if CONSTITUTION_PATH.exists():
+        const_data = json.loads(CONSTITUTION_PATH.read_text(encoding="utf-8"))
+        console.print(f"[cyan] Loading {len(const_data)} Constitution records (converting to sections)[/]")
+        session.execute_write(create_statute_node, "Constitution of India", 1950)
+
+        # Extract unique article numbers from the QA records
+        import re
+        articles_seen = set()
+        for record in const_data:
+            text = (record.get("instruction") or "") + " " + (record.get("input") or "")
+            for match in re.finditer(r"Article\s+(\d+[A-Z]?)", text):
+                articles_seen.add(match.group(1))
+
+        console.print(f"  Found {len(articles_seen)} distinct Articles in QA data")
+        for article_num in track(sorted(articles_seen), description="  Constitution"):
+            # Find a QA record referencing this article
+            ref = None
+            for record in const_data:
+                text = (record.get("instruction") or "") + " " + (record.get("input") or "")
+                if f"Article {article_num}" in text:
+                    ref = record
+                    break
+
+            sid = f"CONST_SEC_{article_num.zfill(3)}"
+            content = ref.get("output", "")[:2000] if ref else ""
+            title = ref.get("input", f"Article {article_num}")[:200] if ref else ""
+
+            session.execute_write(
+                lambda tx, sid=sid, num=article_num, title=title, content=content: tx.run("""
+                    MERGE (s:SECTION {section_id: $sid})
+                    SET s.act = 'Constitution of India',
+                        s.number = $number,
+                        s.title = $title,
+                        s.text = $text,
+                        s.year = 1950
+                """,
+                    sid=sid,
+                    number=article_num,
+                    title=title,
+                    text=content,
+                )
+            )
+            session.execute_write(link_section_to_statute, sid, "Constitution of India")
+
 
 
 if __name__ == "__main__":

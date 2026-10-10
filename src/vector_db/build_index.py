@@ -26,6 +26,8 @@ from sentence_transformers import SentenceTransformer
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DATA_RAW = PROJECT_ROOT / "data" / "raw"
 VECTOR_DB_PATH = PROJECT_ROOT / "data" / "processed" / "vector_db"
+CONSUMER_PATH = DATA_RAW / "consumer" / "cpa_2019_sections.json"
+CONSTITUTION_PATH = DATA_RAW / "constitution_qa" / "constitution_qa.json"
 COLLECTION_NAME = "criminal"
 EMBED_MODEL = "all-MiniLM-L6-v2"
 
@@ -105,6 +107,34 @@ for act_name, filename in section_files.items():
     print(f"  {act_name}: {count_after - count_before} sections")
 
 print(f"  Total GovIntel sections: {len(govintel_sections)}")
+
+# ============================================================
+# Step 3b: Load Consumer Protection Act 2019
+# ============================================================
+print("\n[3b/5] Loading Consumer Protection Act 2019...")
+consumer_sections = []
+if CONSUMER_PATH.exists():
+    with open(CONSUMER_PATH, "r", encoding="utf-8") as f:
+        data = json.load(f)
+        if isinstance(data, list):
+            consumer_sections = data
+    print(f"  Loaded {len(consumer_sections)} CPA sections")
+else:
+    print(f"  WARNING: {CONSUMER_PATH} not found. Skipping.")
+
+# ============================================================
+# Step 3c: Load Constitution QA
+# ============================================================
+print("\n[3c/5] Loading Constitution QA...")
+constitution_records = []
+if CONSTITUTION_PATH.exists():
+    with open(CONSTITUTION_PATH, "r", encoding="utf-8") as f:
+        data = json.load(f)
+        if isinstance(data, list):
+            constitution_records = data
+    print(f"  Loaded {len(constitution_records)} Constitution QA records")
+else:
+    print(f"  WARNING: {CONSTITUTION_PATH} not found. Skipping.")
 
 # ============================================================
 # Step 4: Load CrPC QA
@@ -196,6 +226,41 @@ for record in crpc_records:
         "section_title": "",
     })
     ids.append(f"crpc_{doc_id}")
+    doc_id += 1
+
+# ----- Consumer Protection Act -----
+for section in consumer_sections:
+    text_content = section.get("section_content", "")
+    if not text_content:
+        continue
+    section_number = str(section.get("section_number", ""))
+    section_title = section.get("section_title", "")
+    text = f"Consumer Protection Act 2019 Section {section_number}: {section_title}\n{text_content}"
+    documents.append(text)
+    metadatas.append({
+        "source": "cpa_2019",
+        "act": "CPA 2019",
+        "section_number": section_number,
+        "section_title": section_title,
+    })
+    ids.append(f"cpa_{doc_id}")
+    doc_id += 1
+
+# ----- Constitution QA -----
+for record in constitution_records:
+    instruction = record.get("instruction", "")
+    output = record.get("output", "")
+    if not instruction or not output:
+        continue
+    text = f"Q: {instruction}\nA: {output}"
+    documents.append(text)
+    metadatas.append({
+        "source": "constitution_qa",
+        "act": "Constitution of India",
+        "section_number": "",
+        "section_title": "",
+    })
+    ids.append(f"const_{doc_id}")
     doc_id += 1
 
 print(f"  Total documents to embed: {len(documents)}")
