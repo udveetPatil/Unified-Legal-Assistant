@@ -473,3 +473,39 @@ Two queries that previously returned results now return zero candidates:
 - Q24: "Divorce" — false positive verification
 - Q26: "Trademark" — false positive verification
 - Q28: "Landlord evict" — false positive verification
+
+
+
+## [2026-10-12 22:00] - Ollama LLM Integration with Raw + Paraphrase Display
+
+### What Changed
+- `src/llm/__init__.py`: new module
+- `src/llm/generator.py`: calls Ollama (llama3.2:1b) to paraphrase verified legal text
+- `src/integration.py`: added `paraphrase` field to `IntegratedResult`; calls generator only when verified
+- `src/ui/app.py`: displays **Simplified explanation** (LLM) and **Verified legal text** (raw) separately; fixed duplicate UI blocks
+
+### Why
+- Raw section text is legally accurate but hard to read
+- LLM paraphrase makes answers conversational
+- **Raw text stays as the source of truth** to prevent hallucination
+- User sees both: if the paraphrase is wrong, the raw text below is the correct reference
+
+### Output
+
+**Before (raw only):**
+> Under Section 103 of BNS 2023: 103. Punishment for murder.—(1) Whoever commits murder shall be punished with death or imprisonment for life, and shall also be liable to fine. (2) When a group of five or more persons acting in concert...
+
+**After (paraphrase + raw):**
+
+**Simplified explanation:**
+> The punishment for murder varies depending on the circumstances. Under Section 103 of the BNS 2023, murder is punishable by death or imprisonment for life, and also carries a fine. Additionally, when a group of five or more persons acting in concert commits murder on the ground of race, caste, or other similar grounds, each member of the group can be punished with death or imprisonment for life and also face a fine.
+
+**Verified legal text:**
+> Under Section 103 of BNS 2023: 103. Punishment for murder.—(1) Whoever commits murder shall be punished with death or imprisonment for life, and shall also be liable to fine. (2) When a group of five or more persons acting in concert...
+
+### UI Fix
+- Removed duplicate "Answer" section, "Why this answer?" expander, and "Retrieved candidates" expander
+
+### Model
+- Ollama: `llama3.2:1b`
+- Prompt includes strict rules: no new facts, cite section numbers, do not add conditions not in source

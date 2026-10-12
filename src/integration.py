@@ -17,6 +17,7 @@ from dataclasses import dataclass, field
 
 from src.pipeline import RetrievalPipeline
 from src.verifier.verifier_agent import VerifierAgent
+from src.llm.generator import generate_answer
 
 
 # ──────────────────────────────────────────────
@@ -55,6 +56,7 @@ class IntegratedResult:
     verified: bool
     confidence: float
     answer: str
+    paraphrase: str = ""
     candidates: list = field(default_factory=list)
     verification_reason: str = ""
     warning: str = ""
@@ -65,6 +67,7 @@ class IntegratedResult:
             "verified": self.verified,
             "confidence": round(self.confidence, 3),
             "answer": self.answer,
+            "paraphrase": self.paraphrase,
             "candidate_count": len(self.candidates),
             "top_candidates": [
                 {
@@ -140,11 +143,25 @@ class IntegratedLegalAssistant:
                 "the legal knowledge graph. Please consult a qualified lawyer."
             )
 
+        # Generate LLM paraphrase (only if verified)
+        paraphrase = ""
+        if verified:
+            try:
+                paraphrase = generate_answer(
+                    query=query,
+                    verified_text=draft_answer,
+                    confidence=confidence,
+                    verified=verified,
+                )
+            except Exception as e:
+                paraphrase = f"(LLM paraphrase unavailable: {e})"
+
         return IntegratedResult(
             query=query,
             verified=verified,
             confidence=confidence,
             answer=draft_answer,
+            paraphrase=paraphrase,
             candidates=candidates,
             verification_reason=verification.reason,
             warning=warning,

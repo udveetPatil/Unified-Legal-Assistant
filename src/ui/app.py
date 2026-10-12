@@ -62,7 +62,7 @@ with st.sidebar:
         4. Flags unverified answers with a warning
 
         **Anti-hallucination:** Every answer is checked against a Neo4j graph of
-        2,339 nodes and 5,384 edges before being returned.
+        2,479 nodes and 5,334 edges before being returned.
         """
     )
     st.markdown("---")
@@ -120,7 +120,13 @@ if ask_button and query.strip():
     if result.warning:
         st.error(result.warning)
 
-    # ----- Answer text -----
+    # ----- Simplified explanation (LLM paraphrase) -----
+    if result.paraphrase:
+        st.markdown("**Simplified explanation:**")
+        st.markdown(result.paraphrase)
+
+    # ----- Verified source text (raw) -----
+    st.markdown("**Verified legal text:**")
     st.markdown(result.answer)
 
     # ----- Verification reason -----
