@@ -142,7 +142,7 @@ def classify(query: str) -> QueryIntent:
     # ----- Section number extraction -----
     section_match = re.search(r"section\s+(\d+[a-z]?)", q_lower)
     if section_match:
-        intent.section_number = section_match.group(1)
+        intent.section_number = section_match.group(1).upper()
 
         # If no act was named, check if this is a famous section
         if not intent.act:

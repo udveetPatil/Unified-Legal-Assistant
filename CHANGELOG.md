@@ -377,3 +377,30 @@ Two queries that previously returned results now return zero candidates:
 1. Procedural queries: 60% — no clean procedural QA source
 2. Out-of-scope leakage: 60% — trademark/eviction return verified answers
 3. Consumer queries: 67% — better but retrieval still imprecise
+
+
+## [2026-10-12 18:00] - IPC Data Fix + Section Case Normalization
+
+### What Changed
+- `fix_missing_ipc.py`: new script. Merges 99 missing IPC sections from civictech-India.
+- `src/classifier/intent.py`: `.upper()` on section_number extraction
+
+### Why
+- 61 IPC sections referenced in judgment_edges were missing from the data
+- Section number case mismatch: query returned "498a", data stored "498A"
+- Strict filters returned 0 candidates when the section was missing
+
+### Output
+| Metric | Before | After |
+|---|---|---|
+| IPC sections | 476 | 644 |
+| Vector DB docs | 19,627 | 19,725 |
+| specific-section | 60% | 80% |
+| out-of-scope | 60% | 80% |
+
+**Fixed queries:**
+- Section 302 → IPC 302 (was BNS 302)
+- Section 420 → IPC 420 (was BNSS 420)
+- Section 498A → IPC 498A (was IPC 478)
+
+**Remaining issue:** Section 144 (CrPC) returns CrPC QA without a section number. This is a CrPC data gap, not a code problem.
