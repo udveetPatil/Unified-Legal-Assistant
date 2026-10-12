@@ -252,3 +252,29 @@ The verifier returns "verified: True" whenever the retrieved section exists in t
 | Verifier | Works for existence checks; fails for relevance checks |
 | UI | Working |
 | Overall Accuracy | ~25% across 40 varied queries |
+
+
+
+## [2026-10-10 18:00] - Consumer + Constitution Fixes Verified
+
+### What Changed
+- `src/verifier/verifier_agent.py`: added `Article X` and `CPA Section X` patterns to `extract_section_ids()`
+- `tests/stress_test_results.json`: updated after graph and vector DB rebuild
+
+### Why
+- The verifier could not extract Constitution Articles (Article 21) or Consumer sections (CPA Section 2)
+- These patterns enable verification for Consumer and Constitutional queries
+
+### Output
+**Before fixes:**
+- Constitutional: 40% verified
+- Consumer: 0% verified
+
+**After fixes:**
+- Constitutional: 80% verified (4/5)
+- Consumer: 67% verified (2/3)
+
+**Remaining failures (priority for next iteration):**
+1. Section-act collision (Section 302 → BNS 302, should be IPC 302)
+2. Procedural retrieval (anticipatory bail, rights when arrested)
+3. Out-of-scope leakage (trademark, eviction return verified answers)
