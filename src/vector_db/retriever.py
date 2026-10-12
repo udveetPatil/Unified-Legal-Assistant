@@ -1,7 +1,14 @@
 """
-Vector Retriever with metadata filtering.
+Vector Retriever with metadata filtering and fallback logic.
 Uses the Intent Classifier to apply filters before searching ChromaDB.
+
+Fallback chain:
+  1. Strict filter (act + section_number + source)
+  2. Drop section_number
+  3. No filter (pure vector search)
 """
+
+from copy import copy
 
 import chromadb
 from sentence_transformers import SentenceTransformer
@@ -14,6 +21,10 @@ class VectorRetriever:
         self.client = chromadb.PersistentClient(path=db_path)
         self.collection = self.client.get_collection(collection_name)
         self.model = SentenceTransformer("all-MiniLM-L6-v2")
+
+    # ──────────────────────────────────────────────
+    # Filter construction
+    # ──────────────────────────────────────────────
 
     def _build_where_filter(self, intent: QueryIntent) -> dict | None:
         """Build a ChromaDB where filter from the intent."""
@@ -30,7 +41,7 @@ class VectorRetriever:
         if base_filter:
             conditions.append(base_filter)
 
-        # ----- Temporal: default to IPC for substantive, CrPC for procedural -----
+        # ----- Temporal or explicit act -----
         if intent.is_temporal and not intent.act:
             if intent.legal_type == "procedural":
                 conditions.append({"act": "CrPC 1973"})
@@ -39,6 +50,7 @@ class VectorRetriever:
         elif intent.act:
             conditions.append({"act": intent.act})
 
+        # ----- Section number -----
         if intent.section_number:
             conditions.append({"section_number": intent.section_number})
 
@@ -48,34 +60,67 @@ class VectorRetriever:
             return conditions[0]
         return {"$and": conditions}
 
+    def _build_where_filter_no_section(self, intent: QueryIntent) -> dict | None:
+        """Same as _build_where_filter, but ignores section_number."""
+        loose = copy(intent)
+        loose.section_number = None
+        return self._build_where_filter(loose)
+
+    def _build_filter_chain(self, intent: QueryIntent) -> list:
+        """Return a list of progressively looser filters to try."""
+        chain = []
+
+        strict = self._build_where_filter(intent)
+        if strict:
+            chain.append(strict)
+
+        if intent.section_number:
+            loose = self._build_where_filter_no_section(intent)
+            if loose and loose != strict:
+                chain.append(loose)
+
+        # Always end with no filter
+        chain.append(None)
+        return chain
+
+    # ──────────────────────────────────────────────
+    # Retrieval
+    # ──────────────────────────────────────────────
+
     def retrieve(self, intent: QueryIntent, top_k: int = 20) -> list[dict]:
-        """Retrieve top_k candidates from ChromaDB."""
+        """Retrieve top_k candidates from ChromaDB with fallback logic."""
         query_embedding = self.model.encode(intent.raw_query).tolist()
-        where_filter = self._build_where_filter(intent)
 
-        results = self.collection.query(
-            query_embeddings=[query_embedding],
-            n_results=top_k,
-            where=where_filter,
-        )
+        for where_filter in self._build_filter_chain(intent):
+            results = self.collection.query(
+                query_embeddings=[query_embedding],
+                n_results=top_k,
+                where=where_filter,
+            )
 
-        candidates = []
-        for doc, meta, dist, doc_id in zip(
-            results["documents"][0],
-            results["metadatas"][0],
-            results["distances"][0],
-            results["ids"][0],
-        ):
-            candidates.append({
-                "id": doc_id,
-                "text": doc,
-                "metadata": meta,
-                "vector_distance": dist,
-                "source": "vector",
-            })
+            if results["documents"][0]:
+                candidates = []
+                for doc, meta, dist, doc_id in zip(
+                    results["documents"][0],
+                    results["metadatas"][0],
+                    results["distances"][0],
+                    results["ids"][0],
+                ):
+                    candidates.append({
+                        "id": doc_id,
+                        "text": doc,
+                        "metadata": meta,
+                        "vector_distance": dist,
+                        "source": "vector",
+                    })
+                return candidates
 
-        return candidates
+        return []
 
+
+# ──────────────────────────────────────────────
+# CLI test
+# ──────────────────────────────────────────────
 
 if __name__ == "__main__":
     from src.classifier.intent import classify
@@ -88,16 +133,21 @@ if __name__ == "__main__":
         "How do I file an FIR?",
         "What was the punishment for murder in 2010?",
         "My friend was arrested without a warrant. What are his rights?",
+        "What is Section 144?",
+        "What is Section 498A?",
+        "What is Section 302?",
     ]
 
     for q in test_queries:
         intent = classify(q)
         print(f"\nQuery: {q}")
         print(f"Legal type: {intent.legal_type}")
-        print(f"Filter: {retriever._build_where_filter(intent)}")
+        print(f"Act       : {intent.act}")
+        print(f"Section   : {intent.section_number}")
+        print(f"Filter chain: {retriever._build_filter_chain(intent)}")
         results = retriever.retrieve(intent, top_k=5)
         for i, r in enumerate(results, 1):
             print(f"  {i}. [{r['vector_distance']:.4f}] {r['metadata'].get('act')} "
                   f"Sec {r['metadata'].get('section_number')} "
                   f"({r['metadata'].get('source')})")
-            print(f"     {r['text'][:120]}...")
+            print(f"     {r['text'][:100]}...")

@@ -3,9 +3,15 @@ BM25 Retriever for keyword-based search (Level 2).
 
 Loads all documents from ChromaDB, builds a BM25 index,
 and returns top-K keyword matches with metadata filtering.
+
+Fallback chain:
+  1. Strict filter (act + section_number + source)
+  2. Drop section_number
+  3. No filter
 """
 
 import pickle
+from copy import copy
 from pathlib import Path
 
 import chromadb
@@ -58,38 +64,9 @@ class BM25Retriever:
         """Simple whitespace + lowercase tokenization."""
         return text.lower().split()
 
-    def _build_where_filter(self, intent: QueryIntent) -> dict | None:
-        """Build a ChromaDB where filter from the intent."""
-
-        # ----- Legal type determines source preference -----
-        if intent.legal_type == "procedural":
-            base_filter = {"source": "crpc_qa"}
-        elif intent.legal_type == "substantive":
-            base_filter = {"source": {"$ne": "crpc_qa"}}
-        else:
-            base_filter = None
-
-        conditions = []
-        if base_filter:
-            conditions.append(base_filter)
-
-        # ----- Temporal: default to IPC for substantive, CrPC for procedural -----
-        if intent.is_temporal and not intent.act:
-            if intent.legal_type == "procedural":
-                conditions.append({"act": "CrPC 1973"})
-            else:
-                conditions.append({"act": "IPC 1860"})
-        elif intent.act:
-            conditions.append({"act": intent.act})
-
-        if intent.section_number:
-            conditions.append({"section_number": intent.section_number})
-
-        if len(conditions) == 0:
-            return None
-        if len(conditions) == 1:
-            return conditions[0]
-        return {"$and": conditions}
+    # ──────────────────────────────────────────────
+    # Filter logic
+    # ──────────────────────────────────────────────
 
     def _matches_filter(self, metadata: dict, intent: QueryIntent) -> bool:
         """Check if a document matches the intent's metadata filters."""
@@ -117,8 +94,18 @@ class BM25Retriever:
 
         return True
 
+    def _matches_filter_no_section(self, metadata: dict, intent: QueryIntent) -> bool:
+        """Same as _matches_filter, but ignores section_number."""
+        loose = copy(intent)
+        loose.section_number = None
+        return self._matches_filter(metadata, loose)
+
+    # ──────────────────────────────────────────────
+    # Retrieval
+    # ──────────────────────────────────────────────
+
     def retrieve(self, intent: QueryIntent, top_k: int = 20) -> list[dict]:
-        """Retrieve top_k candidates using BM25."""
+        """Retrieve top_k candidates using BM25 with fallback logic."""
         tokenized_query = self._tokenize(intent.raw_query)
         scores = self.bm25.get_scores(tokenized_query)
 
@@ -128,24 +115,39 @@ class BM25Retriever:
             reverse=True,
         )
 
-        candidates = []
-        for doc_id, doc, meta, score in ranked:
-            if not self._matches_filter(meta, intent):
-                continue
-            if score <= 0:
-                continue
-            candidates.append({
-                "id": doc_id,
-                "text": doc,
-                "metadata": meta,
-                "bm25_score": float(score),
-                "source": "bm25",
-            })
-            if len(candidates) >= top_k:
-                break
+        # Try progressively looser filters
+        attempts = [
+            (self._matches_filter, "strict"),
+            (self._matches_filter_no_section, "no_section"),
+            (lambda meta, intent: True, "no_filter"),
+        ]
 
-        return candidates
+        for matcher, _label in attempts:
+            candidates = []
+            for doc_id, doc, meta, score in ranked:
+                if not matcher(meta, intent):
+                    continue
+                if score <= 0:
+                    continue
+                candidates.append({
+                    "id": doc_id,
+                    "text": doc,
+                    "metadata": meta,
+                    "bm25_score": float(score),
+                    "source": "bm25",
+                })
+                if len(candidates) >= top_k:
+                    break
 
+            if candidates:
+                return candidates
+
+        return []
+
+
+# ──────────────────────────────────────────────
+# CLI test
+# ──────────────────────────────────────────────
 
 if __name__ == "__main__":
     from src.classifier.intent import classify
@@ -157,16 +159,19 @@ if __name__ == "__main__":
         "What does Section 103 of BNS say?",
         "How do I file an FIR?",
         "What was the punishment for murder in 2010?",
-        "My friend was arrested without a warrant. What are his rights?",
+        "What is Section 144?",
+        "What is Section 498A?",
     ]
 
     for q in test_queries:
         intent = classify(q)
         print(f"\nQuery: {q}")
         print(f"Legal type: {intent.legal_type}")
+        print(f"Act       : {intent.act}")
+        print(f"Section   : {intent.section_number}")
         results = retriever.retrieve(intent, top_k=5)
         for i, r in enumerate(results, 1):
             print(f"  {i}. [score={r['bm25_score']:.2f}] {r['metadata'].get('act')} "
                   f"Sec {r['metadata'].get('section_number')} "
                   f"({r['metadata'].get('source')})")
-            print(f"     {r['text'][:120]}...")
+            print(f"     {r['text'][:100]}...")

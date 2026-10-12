@@ -347,3 +347,33 @@ Two queries that previously returned results now return zero candidates:
 | Stress test overall | ~60% |
 | Strongest categories | ambiguous (100%), typos (100%), constitutional (80%), multi-hop (80%), temporal (80%) |
 | Weakest categories | consumer (67%), procedural (60%), specific-section (60%) |
+
+
+
+## [2026-10-12 16:00] - Fallback Retrieval + Disambiguation Complete
+
+### What Changed
+- `src/classifier/intent.py`: `FAMOUS_SECTIONS` map; longest-first `ACT_KEYWORDS`
+- `src/vector_db/retriever.py`: fallback chain (strict → no_section → none)
+- `src/vector_db/bm25_retriever.py`: same fallback logic
+- `test_disambiguation.py`: 9/9 pass
+
+### Why
+- Bare section numbers were returning the wrong act
+- Strict act+section filters returned 0 candidates when the section was missing
+
+### Output
+| Category | Before | After |
+|---|---|---|
+| specific-section | 60% | **100%** |
+| temporal | 80% | **100%** |
+| Overall | ~60% | **~82%** |
+
+**Fixed queries:** 36, 37, 38, 39, 40, 23 (Section 302 → IPC 302, Section 420 → IPC 420, etc.)
+
+**Known false positive:** Section 498A returns IPC 478 (498A missing from GovIntel IPC data). Documented for RQ5 (verifier semantic vulnerability).
+
+### Remaining Failures (Next Priorities)
+1. Procedural queries: 60% — no clean procedural QA source
+2. Out-of-scope leakage: 60% — trademark/eviction return verified answers
+3. Consumer queries: 67% — better but retrieval still imprecise
