@@ -78,6 +78,11 @@ class VerifierAgent:
             (r'(?:Section|Sec\.?|S\.?)\s*(\d+[A-Z]?)\s*(?:of\s+)?(?:the\s+)?(?:BSA|Bharatiya Sakshya Adhiniyam)', 'BSA_2023_SEC_'),
             (r'(?:IPC|Indian Penal Code)\s*(?:Section|Sec\.?|S\.?)\s*(\d+[A-Z]?)', 'IPC_1860_SEC_'),
             (r'(?:BNS|Bharatiya Nyaya Sanhita)\s*(?:Section|Sec\.?|S\.?)\s*(\d+[A-Z]?)', 'BNS_2023_SEC_'),
+            # Constitution Articles
+            (r'Article\s+(\d+[A-Z]?)', 'CONST_SEC_'),
+            # Consumer Protection Act
+            (r'(?:Section|Sec\.?|S\.?)\s*(\d+)\s*(?:of\s+)?(?:the\s+)?(?:CPA|Consumer Protection Act)', 'CPA_2019_SEC_'),
+            (r'(?:CPA|Consumer Protection Act)\s*(?:Section|Sec\.?|S\.?)\s*(\d+)', 'CPA_2019_SEC_'),
         ]
         for pattern, prefix in patterns:
             for match in re.finditer(pattern, text, re.IGNORECASE):
