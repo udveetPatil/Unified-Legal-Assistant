@@ -20,20 +20,56 @@ class QueryIntent:
     is_temporal: bool = False
 
 
-# ----- Keyword maps -----
+# Ordered longest-key-first to prevent "bns" matching before "bnss"
 ACT_KEYWORDS = {
-    "bns": "BNS 2023",
-    "bharatiya nyaya sanhita": "BNS 2023",
-    "bnss": "BNSS 2023",
     "bharatiya nagarik suraksha sanhita": "BNSS 2023",
-    "bsa": "BSA 2023",
     "bharatiya sakshya adhiniyam": "BSA 2023",
-    "ipc": "IPC 1860",
-    "indian penal code": "IPC 1860",
-    "crpc": "CrPC 1973",
+    "bharatiya nyaya sanhita": "BNS 2023",
     "code of criminal procedure": "CrPC 1973",
-    "iea": "IEA 1872",
     "indian evidence act": "IEA 1872",
+    "indian penal code": "IPC 1860",
+    "bnss": "BNSS 2023",
+    "bsa": "BSA 2023",
+    "bns": "BNS 2023",
+    "crpc": "CrPC 1973",
+    "iea": "IEA 1872",
+    "ipc": "IPC 1860",
+}
+
+# Famous sections that default to a specific act when no act is named
+FAMOUS_SECTIONS = {
+    # IPC — landmark criminal provisions
+    "302": "IPC 1860",
+    "304": "IPC 1860",
+    "304b": "IPC 1860",
+    "307": "IPC 1860",
+    "376": "IPC 1860",
+    "377": "IPC 1860",
+    "392": "IPC 1860",
+    "395": "IPC 1860",
+    "396": "IPC 1860",
+    "420": "IPC 1860",
+    "498a": "IPC 1860",
+    "499": "IPC 1860",
+    "500": "IPC 1860",
+    "506": "IPC 1860",
+    "120b": "IPC 1860",
+    "34": "IPC 1860",
+    "149": "IPC 1860",
+    # CrPC — landmark procedural provisions
+    "41": "CrPC 1973",
+    "50": "CrPC 1973",
+    "57": "CrPC 1973",
+    "125": "CrPC 1973",
+    "144": "CrPC 1973",
+    "154": "CrPC 1973",
+    "161": "CrPC 1973",
+    "164": "CrPC 1973",
+    "167": "CrPC 1973",
+    "200": "CrPC 1973",
+    "437": "CrPC 1973",
+    "438": "CrPC 1973",
+    "439": "CrPC 1973",
 }
 
 QUESTION_TYPE_KEYWORDS = {
@@ -97,16 +133,22 @@ def classify(query: str) -> QueryIntent:
     else:
         intent.domain = "criminal"
 
-    # ----- Act detection -----
-    for kw, act in ACT_KEYWORDS.items():
+    # ----- Act detection (longest key first) -----
+    for kw in sorted(ACT_KEYWORDS.keys(), key=len, reverse=True):
         if kw in q_lower:
-            intent.act = act
+            intent.act = ACT_KEYWORDS[kw]
             break
 
     # ----- Section number extraction -----
     section_match = re.search(r"section\s+(\d+[a-z]?)", q_lower)
     if section_match:
         intent.section_number = section_match.group(1)
+
+        # If no act was named, check if this is a famous section
+        if not intent.act:
+            default_act = FAMOUS_SECTIONS.get(intent.section_number.lower())
+            if default_act:
+                intent.act = default_act
 
     # ----- Question type detection -----
     for kw, qtype in QUESTION_TYPE_KEYWORDS.items():

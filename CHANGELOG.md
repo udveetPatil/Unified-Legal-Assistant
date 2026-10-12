@@ -278,3 +278,72 @@ The verifier returns "verified: True" whenever the retrieved section exists in t
 1. Section-act collision (Section 302 → BNS 302, should be IPC 302)
 2. Procedural retrieval (anticipatory bail, rights when arrested)
 3. Out-of-scope leakage (trademark, eviction return verified answers)
+
+
+
+## [2026-10-12 14:30] - Section-Act Disambiguation
+
+### What Changed
+- `src/classifier/intent.py`: reordered `ACT_KEYWORDS` longest-key-first to prevent `"bns"` matching before `"bnss"`
+- `src/classifier/intent.py`: added `FAMOUS_SECTIONS` map for bare section numbers
+- `src/classifier/intent.py`: apply default act when a bare section matches a famous landmark section
+- `test_disambiguation.py`: new 9-query test for act resolution
+
+### Why
+- The system could not disambiguate bare section numbers across acts
+- "Section 302" returned BNS 302 instead of IPC 302
+- "Section 420" returned BNSS 420 instead of IPC 420
+- These are among the most commonly referenced sections in Indian criminal law
+
+### Output
+
+**Disambiguation test (9/9 pass):**
+
+| Query | Expected Act | Got Act | Result |
+|---|---|---|---|
+| What is Section 302? | IPC 1860 | IPC 1860 | ✅ |
+| What is Section 420? | IPC 1860 | IPC 1860 | ✅ |
+| What is Section 144? | CrPC 1973 | CrPC 1973 | ✅ |
+| What is Section 498A? | IPC 1860 | IPC 1860 | ✅ |
+| What is Section 103 of BNS? | BNS 2023 | BNS 2023 | ✅ |
+| What is Section 302 of BNS? | BNS 2023 | BNS 2023 | ✅ |
+| What is Section 173 of BNSS? | BNSS 2023 | BNSS 2023 | ✅ |
+| What is Section 103? | None | None | ✅ |
+| What is Section 173? | None | None | ✅ |
+
+**Stress test improvement (queries 36, 37, 38):**
+
+| # | Query | Before | After |
+|---|---|---|---|
+| 36 | What is Section 302? | BNS 2023 Sec 302 | **IPC 1860 Sec 302** ✅ |
+| 37 | What is Section 376? | IPC 1860 Sec 376 | IPC 1860 Sec 376 ✅ |
+| 38 | What is Section 420? | BNSS 2023 Sec 420 | **IPC 1860 Sec 420** ✅ |
+
+**Specific-section category:** 60% → 60% (net unchanged due to new regressions)
+
+### Known Regressions
+
+Two queries that previously returned results now return zero candidates:
+
+| # | Query | Before | After |
+|---|---|---|---|
+| 39 | What is Section 498A? | NO CANDIDATES | NO CANDIDATES (unchanged) |
+| 40 | What is Section 144? | BNSS 2023 Sec 144 | **NO CANDIDATES** (regressed) |
+
+**Root cause:** The new strict filter `{act, section_number}` finds nothing because:
+- CrPC content in the vector DB comes from `crpc_qa.json` (which has empty `section_number`)
+- IPC 498A is not present in the GovIntel IPC sections file
+
+**Next fix:** Add fallback logic to the retrievers — when a strict filter returns zero results, retry with a looser filter (drop section number, then no filter).
+
+### Current System State
+
+| Metric | Value |
+|---|---|
+| Vector DB documents | 19,627 |
+| Graph nodes | 1,954 |
+| Graph edges | 5,334 |
+| Disambiguation test | 9/9 pass |
+| Stress test overall | ~60% |
+| Strongest categories | ambiguous (100%), typos (100%), constitutional (80%), multi-hop (80%), temporal (80%) |
+| Weakest categories | consumer (67%), procedural (60%), specific-section (60%) |
