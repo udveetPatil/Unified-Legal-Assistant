@@ -31,7 +31,7 @@ class VectorRetriever:
 
         # ----- Legal type determines source preference -----
         if intent.legal_type == "procedural":
-            base_filter = {"source": "crpc_qa"}
+            base_filter = {"source": {"$in": ["crpc_qa", "crpc_sections"]}}
         elif intent.legal_type == "substantive":
             base_filter = {"source": {"$ne": "crpc_qa"}}
         else:

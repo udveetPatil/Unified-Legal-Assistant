@@ -73,7 +73,7 @@ class BM25Retriever:
 
         # ----- Legal type filter -----
         if intent.legal_type == "procedural":
-            if metadata.get("source") != "crpc_qa":
+            if metadata.get("source") not in ("crpc_qa", "crpc_sections"):
                 return False
         elif intent.legal_type == "substantive":
             if metadata.get("source") == "crpc_qa":

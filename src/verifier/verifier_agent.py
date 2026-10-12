@@ -83,6 +83,8 @@ class VerifierAgent:
             # Consumer Protection Act
             (r'(?:Section|Sec\.?|S\.?)\s*(\d+)\s*(?:of\s+)?(?:the\s+)?(?:CPA|Consumer Protection Act)', 'CPA_2019_SEC_'),
             (r'(?:CPA|Consumer Protection Act)\s*(?:Section|Sec\.?|S\.?)\s*(\d+)', 'CPA_2019_SEC_'),
+            (r'(?:Section|Sec\.?|S\.?)\s*(\d+[A-Z]?)\s*(?:of\s+)?(?:the\s+)?(?:CrPC|Code of Criminal Procedure)', 'CrPC_1973_SEC_'),
+            (r'(?:CrPC|Code of Criminal Procedure)\s*(?:Section|Sec\.?|S\.?)\s*(\d+[A-Z]?)', 'CrPC_1973_SEC_'),
         ]
         for pattern, prefix in patterns:
             for match in re.finditer(pattern, text, re.IGNORECASE):

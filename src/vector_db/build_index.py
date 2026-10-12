@@ -28,6 +28,7 @@ DATA_RAW = PROJECT_ROOT / "data" / "raw"
 VECTOR_DB_PATH = PROJECT_ROOT / "data" / "processed" / "vector_db"
 CONSUMER_PATH = DATA_RAW / "consumer" / "cpa_2019_sections.json"
 CONSTITUTION_PATH = DATA_RAW / "constitution_qa" / "constitution_qa.json"
+CRPC_TEXT_PATH = DATA_RAW / "crpc_iea" / "crpc.json"
 COLLECTION_NAME = "criminal"
 EMBED_MODEL = "all-MiniLM-L6-v2"
 
@@ -136,6 +137,22 @@ if CONSTITUTION_PATH.exists():
 else:
     print(f"  WARNING: {CONSTITUTION_PATH} not found. Skipping.")
 
+
+# ============================================================
+# Step 3d: Load CrPC raw sections
+# ============================================================
+print("\n[3d/5] Loading CrPC raw sections...")
+crpc_sections = []
+if CRPC_TEXT_PATH.exists():
+    with open(CRPC_TEXT_PATH, "r", encoding="utf-8") as f:
+        data = json.load(f)
+        if isinstance(data, list):
+            crpc_sections = data
+    print(f"  Loaded {len(crpc_sections)} CrPC sections")
+else:
+    print(f"  WARNING: {CRPC_TEXT_PATH} not found. Skipping.")
+
+
 # ============================================================
 # Step 4: Load CrPC QA
 # ============================================================
@@ -209,6 +226,25 @@ for section in govintel_sections:
         "section_title": section["section_title"],
     })
     ids.append(f"govintel_{doc_id}")
+    doc_id += 1
+
+
+# ----- CrPC raw sections -----
+for section in crpc_sections:
+    num = str(section.get("section", "")).strip().upper()
+    title = section.get("section_title", "")
+    text_content = section.get("section_desc", "")
+    if not num or not text_content:
+        continue
+    text = f"CrPC 1973 Section {num}: {title}\n{text_content}"
+    documents.append(text)
+    metadatas.append({
+        "source": "crpc_sections",
+        "act": "CrPC 1973",
+        "section_number": num,
+        "section_title": title,
+    })
+    ids.append(f"crpc_sec_{doc_id}")
     doc_id += 1
 
 # ----- CrPC QA -----

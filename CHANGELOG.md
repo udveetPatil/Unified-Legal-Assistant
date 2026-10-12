@@ -404,3 +404,72 @@ Two queries that previously returned results now return zero candidates:
 - Section 498A → IPC 498A (was IPC 478)
 
 **Remaining issue:** Section 144 (CrPC) returns CrPC QA without a section number. This is a CrPC data gap, not a code problem.
+
+
+## [2026-10-12 20:30] - CrPC Sections + Verifier Patterns Complete
+
+### What Changed
+- `src/vector_db/build_index.py`: load `crpc.json` (525 sections) as `crpc_sections` source
+- `src/graph_db/build_graph.py`: load CrPC sections as SECTION nodes with `section_id: CrPC_1973_SEC_XXX`
+- `src/vector_db/retriever.py`: procedural source filter includes both `crpc_qa` and `crpc_sections`
+- `src/vector_db/bm25_retriever.py`: mirrored the same source filter logic
+- `src/verifier/verifier_agent.py`: added CrPC section extraction patterns
+
+### Why
+- CrPC sections existed in `crpc.json` but were not loaded into the vector DB or graph
+- Query "Section 144" retrieved CrPC 144 from the vector DB but the verifier rejected it because no SECTION node existed
+- The verifier had no regex pattern for CrPC references
+
+### Output
+
+**Graph and Vector DB:**
+| Metric | Before | After |
+|---|---|---|
+| Vector DB documents | 19,725 | 20,250 |
+| Graph nodes | 1,954 | 2,479 |
+| CrPC sections in graph | 0 | 525 |
+| CrPC sections in vector DB | 0 | 525 |
+
+**Verifier patterns (final list):**
+| Pattern | Prefix |
+|---|---|
+| Section X of IPC | IPC_1860_SEC_ |
+| Section X of BNS | BNS_2023_SEC_ |
+| Section X of BNSS | BNSS_2023_SEC_ |
+| Section X of BSA | BSA_2023_SEC_ |
+| Article X | CONST_SEC_ |
+| Section X of CPA | CPA_2019_SEC_ |
+| CPA Section X | CPA_2019_SEC_ |
+| Section X of CrPC | CrPC_1973_SEC_ |
+| CrPC Section X | CrPC_1973_SEC_ |
+
+**Stress test:**
+| Category | Before | After |
+|---|---|---|
+| specific-section | 80% | **100%** |
+| temporal | 100% | 100% |
+| ambiguous | 100% | 100% |
+| typos | 100% | 100% |
+| constitutional | 80% | 80% |
+| multi-hop | 80% | 80% |
+| consumer | 67% | 67% |
+| procedural | 60% | 60% |
+| out-of-scope | 60% | 60% |
+| **Overall** | **82%** | **82%** |
+
+**Fixed queries:**
+- Section 302 → IPC 302 (verified)
+- Section 376 → IPC 376 (verified)
+- Section 420 → IPC 420 (verified)
+- Section 498A → IPC 498A (verified)
+- Section 144 → CrPC 144 (verified)
+
+**Remaining failures (retrieval quality, not data gaps):**
+- Q2: "Anticipatory bail" returns CrPC QA without section number
+- Q4: "Rights when arrested" returns CrPC QA without section number
+- Q8: "Article 19" returns CrPC QA instead of Constitution
+- Q12: "Consumer complaint" returns CrPC QA instead of CPA
+- Q17: "Juvenile tried as adult" — Juvenile Justice Act not in scope
+- Q24: "Divorce" — false positive verification
+- Q26: "Trademark" — false positive verification
+- Q28: "Landlord evict" — false positive verification

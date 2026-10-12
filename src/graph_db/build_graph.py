@@ -18,7 +18,7 @@ SECTIONS_DIR = BASE / "data" / "raw" / "govintel" / "sections"
 CONSUMER_PATH = BASE / "data" / "raw" / "consumer" / "cpa_2019_sections.json"
 CONSTITUTION_PATH = BASE / "data" / "raw" / "constitution_qa" / "constitution_qa.json"
 GRAPH_DIR = BASE / "data" / "raw" / "govintel" / "graph"
-
+CRPC_TEXT_PATH = BASE / "data" / "raw" / "crpc_iea" / "crpc.json"
 # --- Neo4j connection ---
 NEO4J_URI = "bolt://localhost:7687"
 NEO4J_USER = "neo4j"
@@ -183,6 +183,36 @@ STATUTE_YEARS = {
 }
 
 
+def load_crpc_sections(session):
+    """Load CrPC raw sections into the graph."""
+    if not CRPC_TEXT_PATH.exists():
+        console.print("[yellow]⚠ No crpc.json found[/]")
+        return
+    crpc_data = json.loads(CRPC_TEXT_PATH.read_text(encoding="utf-8"))
+    console.print(f"[cyan] Loading {len(crpc_data)} CrPC sections[/]")
+    session.execute_write(create_statute_node, "CrPC 1973", 1973)
+    for sec in track(crpc_data, description="  CrPC 1973"):
+        num = str(sec.get("section", "")).strip().upper()
+        if not num:
+            continue
+        sid = f"CrPC_1973_SEC_{num.zfill(3)}"
+        session.execute_write(
+            lambda tx, sid=sid, sec=sec: tx.run("""
+                MERGE (s:SECTION {section_id: $sid})
+                SET s.act = 'CrPC 1973',
+                    s.number = $number,
+                    s.title = $title,
+                    s.text = $text,
+                    s.year = 1973
+            """,
+                sid=sid,
+                number=sec.get("section", ""),
+                title=sec.get("section_title", ""),
+                text=sec.get("section_desc", "")[:2000],
+            )
+        )
+        session.execute_write(link_section_to_statute, sid, "CrPC 1973")
+
 def load_sections(session):
     """Load all GovIntel section files into SECTION + STATUTE nodes."""
     for fname, statute_name in STATUTE_MAP.items():
@@ -338,6 +368,7 @@ def build():
         load_sections(session)
         load_extra_sections(session)
         # load_inirac_cases(session)  # Dropped: InIRAC extraction failed (94.3% unusable)
+        load_crpc_sections(session)
 
         # Load edges
         load_deterministic_edges(session)
