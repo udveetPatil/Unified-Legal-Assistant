@@ -150,6 +150,15 @@ def classify(query: str) -> QueryIntent:
             if default_act:
                 intent.act = default_act
 
+    # ----- Catch "BNS 5000" / "IPC 999" without the word "section" -----
+    if not intent.section_number:
+        act_sec_match = re.search(
+            r"\b(?:bns|bnss|bsa|ipc|crpc|cpa)\s+(\d+[a-z]?)\b",
+            q_lower,
+        )
+        if act_sec_match:
+            intent.section_number = act_sec_match.group(1).upper()                
+
     # ----- Question type detection -----
     for kw, qtype in QUESTION_TYPE_KEYWORDS.items():
         if kw in q_lower:

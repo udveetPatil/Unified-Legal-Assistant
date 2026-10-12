@@ -76,6 +76,11 @@ TEST_QUERIES = [
     ("specific-section", "What is Section 420?", "IPC cheating"),
     ("specific-section", "What is Section 498A?", "IPC cruelty"),
     ("specific-section", "What is Section 144?", "CrPC unlawful assembly"),
+
+    # Category 10: Hallucination rejection
+    ("hallucination", "Can someone be arrested under BNS Section 999 for cyberbullying?", "Should REJECT — section does not exist"),
+    ("hallucination", "What is Section 999 of IPC?", "Should REJECT — section does not exist"),
+    ("hallucination", "Is murder punished under BNS 5000?", "Should REJECT"),
 ]
 
 

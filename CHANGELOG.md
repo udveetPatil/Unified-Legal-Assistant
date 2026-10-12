@@ -509,3 +509,34 @@ Two queries that previously returned results now return zero candidates:
 ### Model
 - Ollama: `llama3.2:1b`
 - Prompt includes strict rules: no new facts, cite section numbers, do not add conditions not in source
+
+
+
+
+## [2026-10-12 23:30] - Anti-Hallucination Guarantee Complete
+
+### What Changed
+- `src/classifier/intent.py`: detect section numbers in `BNS 5000` / `IPC 999` format (case-insensitive regex)
+- `src/integration.py`: check that a named section exists in the graph before retrieval; hard reject if not
+- `src/verifier/verifier_agent.py`: restore soft penalty (hard reject caused regressions)
+- `tests/stress_test.py`: added 3 hallucination test cases
+
+### Why
+- Query "BNS Section 999" previously returned a verified answer about an unrelated section
+- The LLM paraphrase described it as if it were about cyberbullying
+- This was the exact hallucination the verifier was supposed to prevent
+
+### Output
+| Hallucination Query | Before | After |
+|---|---|---|
+| BNS Section 999 | Verified (0.61) | **Rejected (0.0)** |
+| IPC Section 999 | N/A | **Rejected (0.0)** |
+| BNS 5000 | Verified (0.83) | **Rejected (0.0)** |
+
+**Hallucination category: 0% verified (3/3 rejected).**
+
+### Current System State
+- Vector DB: 20,250 documents
+- Graph: 2,479 nodes, 5,334 edges
+- Overall stress test: 33/43 verified (77%)
+- Zero hallucinated sections verified

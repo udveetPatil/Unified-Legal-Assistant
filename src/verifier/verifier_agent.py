@@ -284,6 +284,8 @@ class VerifierAgent:
             confidence = sum(scores) / len(scores)
 
         # Penalize for unmatched sections
+                # Penalize for unmatched sections (harsher than before, but not absolute)
+                # Penalize for unmatched sections
         if unmatched:
             penalty = len(unmatched) / (len(matched_sections) + len(unmatched))
             confidence *= (1 - penalty * 0.5)

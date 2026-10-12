@@ -107,6 +107,26 @@ class IntegratedLegalAssistant:
         # Step 1: Retrieve
         candidates, intent = self.retrieval.retrieve(query, top_k=top_k)
 
+        # Hard reject if the query names a section that does not exist
+        if intent.act and intent.section_number:
+            verifier_id = to_verifier_id(intent.act, intent.section_number)
+            with self.verifier.driver.session() as session:
+                result = session.run(
+                    "MATCH (s:SECTION {section_id: $sid}) RETURN s LIMIT 1",
+                    sid=verifier_id,
+                )
+                exists = result.single() is not None
+            if not exists:
+                return IntegratedResult(
+                    query=query,
+                    verified=False,
+                    confidence=0.0,
+                    answer=f"Section {intent.section_number} does not exist in {intent.act}.",
+                    candidates=[],
+                    verification_reason=f"Section {verifier_id} not found in the legal knowledge graph.",
+                    warning="This section does not exist. The query may be based on incorrect information.",
+                )
+
         if not candidates:
             return IntegratedResult(
             query=query,
