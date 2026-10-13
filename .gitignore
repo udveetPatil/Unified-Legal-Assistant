@@ -43,3 +43,6 @@ desktop.ini
 data/processed/
 *.sqlite3
 *.pickle
+
+# Translation venv (separate environment for IndicTrans2)
+venv_translation/

@@ -540,3 +540,47 @@ Two queries that previously returned results now return zero candidates:
 - Graph: 2,479 nodes, 5,334 edges
 - Overall stress test: 33/43 verified (77%)
 - Zero hallucinated sections verified
+
+
+## [2026-10-13 02:00] - IndicTrans2 Multilingual Layer
+
+### What Changed
+- `src/translation/__init__.py`: new module
+- `src/translation/translator.py`: bidirectional translation using IndicTrans2 200M
+- `src/translation/bridge.py`: subprocess bridge between main venv and translation venv
+- `.gitignore`: exclude `venv_translation/` from Git tracking
+
+### Why
+- Enable users to ask legal questions in Indian languages
+- Enable answers in the same language
+- Keep the system fully offline (no cloud translation APIs)
+
+### Architecture
+Two separate Python environments are required because IndicTrans2 depends on old `transformers` (4.40.2), while the retrieval pipeline requires new `transformers` (5.17.0). They cannot coexist in one venv.
+
+| Environment | Purpose | Key Packages |
+|---|---|---|
+| `venv` | Main app: retrieval, verification, LLM, UI | transformers 5.x, chromadb, streamlit |
+| `venv_translation` | Translation only | transformers 4.40.2, IndicTrans2 200M |
+
+The `bridge.py` module spawns subprocess calls from the main venv into `venv_translation` for translation and returns the result as JSON.
+
+### Languages Supported
+Hindi, Tamil, Telugu, Kannada, Malayalam, Bengali, Marathi, Gujarati, Urdu, Punjabi, Assamese, Odia
+
+### Output
+| Direction | Input | Output |
+|---|---|---|
+| Hindi → English | चोरी की सज़ा क्या है? | What is the penalty for theft? |
+| English → Hindi | What is the punishment for murder? | हत्या की सजा क्या है |
+
+### Known Limitation
+- 10–30 seconds per translation call (CPU-only; model reloads from disk on each subprocess call)
+- Acceptable for demo purposes; not production-grade
+
+### Install Steps (for teammates)
+1. `python -m venv venv_translation`
+2. `.\venv_translation\Scripts\Activate.ps1`
+3. `pip install transformers==4.40.2 tokenizers==0.19.1 sentencepiece sacremoses torch huggingface-hub==0.36.2`
+4. `hf auth login` (requires Hugging Face access to `ai4bharat/indictrans2-en-indic-dist-200M` and `ai4bharat/indictrans2-indic-en-dist-200M`)
+5. Download the models once with `python -m src.translation.translator`
