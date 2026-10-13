@@ -71,12 +71,18 @@ class BM25Retriever:
     def _matches_filter(self, metadata: dict, intent: QueryIntent) -> bool:
         """Check if a document matches the intent's metadata filters."""
 
-        # ----- Legal type filter -----
-        if intent.legal_type == "procedural":
+                # ----- Domain and legal type filter -----
+        if intent.domain == "constitutional":
+            if metadata.get("source") != "constitution_qa":
+                return False
+        elif intent.domain == "consumer":
+            if metadata.get("source") != "cpa_2019":
+                return False
+        elif intent.legal_type == "procedural":
             if metadata.get("source") not in ("crpc_qa", "crpc_sections"):
                 return False
         elif intent.legal_type == "substantive":
-            if metadata.get("source") == "crpc_qa":
+            if metadata.get("source") in ("crpc_qa", "constitution_qa", "cpa_2019"):
                 return False
 
         # ----- Temporal or act filter -----

@@ -29,11 +29,15 @@ class VectorRetriever:
     def _build_where_filter(self, intent: QueryIntent) -> dict | None:
         """Build a ChromaDB where filter from the intent."""
 
-        # ----- Legal type determines source preference -----
-        if intent.legal_type == "procedural":
+        # ----- Domain and legal type determine source preference -----
+        if intent.domain == "constitutional":
+            base_filter = {"source": "constitution_qa"}
+        elif intent.domain == "consumer":
+            base_filter = {"source": "cpa_2019"}
+        elif intent.legal_type == "procedural":
             base_filter = {"source": {"$in": ["crpc_qa", "crpc_sections"]}}
         elif intent.legal_type == "substantive":
-            base_filter = {"source": {"$ne": "crpc_qa"}}
+            base_filter = {"source": {"$nin": ["crpc_qa", "constitution_qa", "cpa_2019"]}}
         else:
             base_filter = None
 

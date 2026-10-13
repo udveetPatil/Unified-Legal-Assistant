@@ -22,7 +22,7 @@ STRICT RULES:
 3. Always cite the section number and act name exactly as given.
 4. Keep the answer to 2-3 sentences.
 5. Do not say "based on the provided text". Answer directly.
-6. If the answer is marked UNVERIFIED, add: "This answer could not be fully verified. Please consult a lawyer."
+6. Do NOT add any warning about verification. The verification status is displayed separately by the system.
 """
 
 

@@ -584,3 +584,29 @@ Hindi, Tamil, Telugu, Kannada, Malayalam, Bengali, Marathi, Gujarati, Urdu, Punj
 3. `pip install transformers==4.40.2 tokenizers==0.19.1 sentencepiece sacremoses torch huggingface-hub==0.36.2`
 4. `hf auth login` (requires Hugging Face access to `ai4bharat/indictrans2-en-indic-dist-200M` and `ai4bharat/indictrans2-indic-en-dist-200M`)
 5. Download the models once with `python -m src.translation.translator`
+
+
+## [2026-10-14 05:00] - Translation Strategy + Warning Fix
+
+### What Changed
+- `src/ui/app.py`: translate only the raw legal text, not the LLM paraphrase
+- `src/ui/app.py`: always show English authoritative text below the translation
+- `src/ui/app.py`: caption noting machine translation is not authoritative
+- `src/llm/generator.py`: removed verification warning instruction from prompt (UI handles this)
+- `src/vector_db/retriever.py`, `src/vector_db/bm25_retriever.py`: domain-aware source filtering
+
+### Why
+- Translating the LLM paraphrase introduced grammatical errors (object/location swap)
+- The LLM was adding "could not be verified" warnings even when answers were verified
+- Consumer queries returned CrPC QA instead of CPA 2019
+
+### Output
+| Fix | Before | After |
+|---|---|---|
+| Hindi legal text | "stealing a car from inside a house" | "stealing from inside a house, a car, or a temple" |
+| Consumer category | 67% | 100% |
+| Spurious warnings | Present | Removed |
+| Overall verified | 33/43 | 34/43 (79%) |
+
+### Design Principle
+The English raw legal text is authoritative. Paraphrase and translation are convenience layers.

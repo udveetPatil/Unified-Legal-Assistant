@@ -15,6 +15,7 @@ if str(ROOT) not in sys.path:
 
 import streamlit as st
 from src.integration import IntegratedLegalAssistant
+from src.translation.bridge import translate_to_english, translate_from_english
 
 
 # ──────────────────────────────────────────────
@@ -36,11 +37,29 @@ def get_assistant():
 
 
 # ──────────────────────────────────────────────
+# Supported languages
+# ──────────────────────────────────────────────
+SUPPORTED_LANGUAGES = {
+    "eng_Latn": "English",
+    "hin_Deva": "Hindi",
+    "tam_Taml": "Tamil",
+    "tel_Telu": "Telugu",
+    "kan_Knda": "Kannada",
+    "mal_Mlym": "Malayalam",
+    "ben_Beng": "Bengali",
+    "mar_Deva": "Marathi",
+    "guj_Gujr": "Gujarati",
+    "urd_Arab": "Urdu",
+    "pan_Guru": "Punjabi",
+}
+
+
+# ──────────────────────────────────────────────
 # Header
 # ──────────────────────────────────────────────
 st.title("⚖️ Unified Legal Assistant for India")
 st.caption(
-    "Offline · Graph-verified · Temporal · Domain-partitioned · Multilingual (coming soon)"
+    "Offline · Graph-verified · Temporal · Domain-partitioned · Multilingual"
 )
 
 st.markdown("---")
@@ -50,6 +69,15 @@ st.markdown("---")
 # Sidebar
 # ──────────────────────────────────────────────
 with st.sidebar:
+    st.header("Language")
+    selected_lang = st.selectbox(
+        "Answer language",
+        options=list(SUPPORTED_LANGUAGES.keys()),
+        format_func=lambda k: SUPPORTED_LANGUAGES[k],
+        index=0,
+    )
+    st.markdown("---")
+
     st.header("About")
     st.markdown(
         """
@@ -103,37 +131,78 @@ if clear_button:
 # Process query
 # ──────────────────────────────────────────────
 if ask_button and query.strip():
+
+    # ----- Step 1: Translate input to English if needed -----
+    query_en = query.strip()
+    if selected_lang != "eng_Latn":
+        with st.spinner(f"Translating from {SUPPORTED_LANGUAGES[selected_lang]}..."):
+            try:
+                query_en = translate_to_english(query.strip(), src_lang=selected_lang)
+            except Exception as e:
+                st.error(f"Input translation failed: {e}")
+                st.stop()
+
+    # ----- Step 2: Retrieve and verify -----
     with st.spinner("Retrieving and verifying..."):
         assistant = get_assistant()
-        result = assistant.ask(query.strip())
+        result = assistant.ask(query_en)
 
+    # ----- Step 3: Translate the RAW LEGAL TEXT only (not the paraphrase) -----
+    translated_answer = result.answer
+    translation_failed = False
+
+    if selected_lang != "eng_Latn" and result.verified:
+        with st.spinner(f"Translating legal text to {SUPPORTED_LANGUAGES[selected_lang]}..."):
+            try:
+                translated_answer = translate_from_english(
+                    result.answer, tgt_lang=selected_lang
+                )
+            except Exception as e:
+                translation_failed = True
+                st.warning(f"Output translation failed: {e}")
+
+    # ----- Display -----
     st.markdown("---")
     st.subheader("Answer")
 
-    # ----- Verified badge -----
+    # Verified badge
     if result.verified:
         st.success(f"✅ Verified — Confidence: {result.confidence:.2f}")
     else:
         st.warning(f"⚠️ Low Confidence — {result.confidence:.2f}")
 
-    # ----- Warning -----
+    # Warning
     if result.warning:
         st.error(result.warning)
 
-    # ----- Simplified explanation (LLM paraphrase) -----
+    # Show translated query if it differs from input
+    if selected_lang != "eng_Latn":
+        with st.expander("Show English translation of your question"):
+            st.markdown(f"**You asked:** {query.strip()}")
+            st.markdown(f"**In English:** {query_en}")
+
+    # Simplified explanation (English only — LLM paraphrase is not translated)
     if result.paraphrase:
-        st.markdown("**Simplified explanation:**")
+        st.markdown("**Simplified explanation (English):**")
         st.markdown(result.paraphrase)
 
-    # ----- Verified source text (raw) -----
-    st.markdown("**Verified legal text:**")
+    # Translated legal text (only when a non-English language is selected)
+    if selected_lang != "eng_Latn" and not translation_failed:
+        st.markdown(f"**Verified legal text ({SUPPORTED_LANGUAGES[selected_lang]}):**")
+        st.markdown(translated_answer)
+        st.caption(
+            "Machine translation. The English text below is the authoritative source."
+        )
+
+    # English legal text (always shown)
+    st.markdown("**Verified legal text (English):**")
     st.markdown(result.answer)
 
-    # ----- Verification reason -----
+    # Verification reason
     with st.expander("Why this answer?"):
         st.write(result.verification_reason)
 
-    # ----- Candidates -----
+    # Candidates
     with st.expander(f"Retrieved {len(result.candidates)} candidates"):
         for i, c in enumerate(result.candidates[:5], 1):
             meta = c.get("metadata", {})
